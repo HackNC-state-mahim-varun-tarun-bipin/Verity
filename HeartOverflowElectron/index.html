@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>HeartOverflow</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    #clipboard-text { white-space: pre-wrap; padding: 10px; border: 1px solid #ccc; min-height: 100px; }
+  </style>
+</head>
+<body>
+  <h1>Clipboard Monitor</h1>
+  <div id="clipboard-text">Waiting for clipboard text...</div>
+  <script>
+    const { ipcRenderer } = require('electron');
+    ipcRenderer.on('clipboard-update', (event, text) => {
+      document.getElementById('clipboard-text').textContent = text;
+    });
+  </script>
+</body>
+</html>
