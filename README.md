@@ -26,9 +26,6 @@ Misinformation and stale internal knowledge both create costly errors. Verity ch
 
 ![Verity Architecture](docs/architecture.png)
 
-> Save the image you shared as: `docs/architecture.png`  
-> This keeps the README image portable and GitHub-friendly.
-
 ## Quick Start
 
 ```bash
