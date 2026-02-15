@@ -47,8 +47,13 @@ const App = () => {
     const [confidence, setConfidence] = (0, react_1.useState)(0);
     const [citations, setCitations] = (0, react_1.useState)([]);
     const [source, setSource] = (0, react_1.useState)("");
+    const [summary, setSummary] = (0, react_1.useState)("");
+    const [matchSnippet, setMatchSnippet] = (0, react_1.useState)("");
+    const [document, setDocument] = (0, react_1.useState)("");
     const [loading, setLoading] = (0, react_1.useState)(false);
     const [showSettings, setShowSettings] = (0, react_1.useState)(false);
+    const [isContentExpanded, setIsContentExpanded] = (0, react_1.useState)(false);
+    const [isSummaryExpanded, setIsSummaryExpanded] = (0, react_1.useState)(false);
     const getLabelColor = (label) => {
         switch (label.toLowerCase()) {
             case "likely true":
@@ -92,6 +97,11 @@ const App = () => {
             setConfidence(0);
             setCitations([]);
             setSource("");
+            setSummary("");
+            setMatchSnippet("");
+            setDocument("");
+            setIsContentExpanded(false);
+            setIsSummaryExpanded(false);
             setLoading(true);
         });
         ipcRenderer.on("verification-result", (_event, response) => {
@@ -103,11 +113,23 @@ const App = () => {
                 if (response.confidence !== undefined) {
                     setConfidence(response.confidence);
                 }
-                if (response.citations) {
-                    setCitations(response.citations);
-                }
                 if (response.source) {
                     setSource(response.source);
+                }
+                if (response.citations) {
+                    setCitations(response.citations);
+                    if (response.source !== "public" && response.citations.length > 0) {
+                        const firstCitation = response.citations[0];
+                        if (firstCitation.match_snippet) {
+                            setMatchSnippet(firstCitation.match_snippet);
+                        }
+                        if (firstCitation.document) {
+                            setDocument(firstCitation.document);
+                        }
+                    }
+                }
+                if (response.summary) {
+                    setSummary(response.summary);
                 }
             }
         });
@@ -136,14 +158,17 @@ const App = () => {
             border: "1px solid rgba(255, 255, 255, 0.1)",
         } },
         react_1.default.createElement(Title, { level: 2, style: { color: "#fff", marginBottom: "16px", marginTop: "0px", display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
-            "HeartOverflow",
+            "Verity",
             react_1.default.createElement(antd_1.Button, { icon: react_1.default.createElement(icons_1.SettingOutlined, null), onClick: () => setShowSettings(true), style: { backgroundColor: 'transparent', border: 'none', color: '#fff', fontSize: '20px' } })),
-        react_1.default.createElement(antd_1.Card, { type: "inner", title: "Content", style: {
+        react_1.default.createElement(antd_1.Card, { type: "inner", title: "Content", onClick: () => clipboardText.length > 100 && setIsContentExpanded(!isContentExpanded), style: {
                 backgroundColor: "#b9b9b9",
                 border: "none",
                 boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
                 marginBottom: "16px",
-            }, headStyle: { backgroundColor: "#b9b9b9", borderBottom: "none" }, bodyStyle: { backgroundColor: "#b9b9b9" } }, clipboardText),
+                cursor: clipboardText.length > 100 ? "pointer" : "default",
+            }, headStyle: { backgroundColor: "#b9b9b9", borderBottom: "none" }, bodyStyle: { backgroundColor: "#b9b9b9", fontFamily: '"SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' } }, clipboardText.length > 100 && !isContentExpanded
+            ? `${clipboardText.substring(0, 100)}...`
+            : clipboardText),
         react_1.default.createElement(antd_1.Card, { loading: loading, style: {
                 backgroundColor: "#2f2f2e",
                 border: "none",
@@ -151,7 +176,7 @@ const App = () => {
             } },
             react_1.default.createElement(antd_1.Flex, { align: "center", gap: "large" },
                 react_1.default.createElement(antd_1.Progress, { type: "circle", percent: Math.abs(confidence) * 100, strokeColor: getProgressColor(), trailColor: "#ffffff", format: (percent) => (react_1.default.createElement("span", { style: { color: '#b9b9b9' } }, `${Math.round(Math.abs(confidence) * 100)}%`)) }),
-                react_1.default.createElement("div", null,
+                react_1.default.createElement("div", { style: { flex: 1 } },
                     react_1.default.createElement(Text, { style: {
                             color: getLabelColor(truthLabel),
                             fontSize: "18px",
@@ -159,15 +184,32 @@ const App = () => {
                             textTransform: "capitalize",
                         } }, truthLabel || "Waiting for verification..."),
                     source && (react_1.default.createElement("div", { style: { marginTop: "8px" } },
-                        react_1.default.createElement(antd_1.Tag, { color: source === "public" ? "orange" : "geekblue" }, source.toUpperCase())))))),
+                        react_1.default.createElement(antd_1.Tag, { color: source === "public" ? "orange" : "geekblue" }, source.toUpperCase()))),
+                    summary && (react_1.default.createElement(antd_1.Card, { onClick: (e) => {
+                            e.stopPropagation();
+                            summary.length > 400 && setIsSummaryExpanded(!isSummaryExpanded);
+                        }, style: {
+                            backgroundColor: "#1f1f1e",
+                            border: "1px solid #444",
+                            borderRadius: "8px",
+                            marginTop: "12px",
+                            cursor: summary.length > 400 ? "pointer" : "default",
+                        }, bodyStyle: { backgroundColor: "#1f1f1e", padding: "12px" } },
+                        react_1.default.createElement(Text, { style: { color: "#b9b9b9", fontSize: "14px", fontFamily: '"SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' } }, summary.length > 400 && !isSummaryExpanded
+                            ? `${summary.substring(0, 400)}...`
+                            : summary)))))),
         citations.length > 0 && (react_1.default.createElement(antd_1.Card, { title: "Citations", style: {
                 backgroundColor: "#2f2f2e",
                 border: "none",
                 boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
                 marginTop: "16px"
-            }, headStyle: { color: "#fff", backgroundColor: "#2f2f2e", borderBottom: "1px solid #444" }, bodyStyle: { backgroundColor: "#2f2f2e" } },
-            react_1.default.createElement("ul", { style: { margin: 0, paddingLeft: "20px" } }, citations.map((citation, index) => (react_1.default.createElement("li", { key: index, style: { marginBottom: "12px" } },
-                react_1.default.createElement("a", { href: citation.url, target: "_blank", rel: "noopener noreferrer", style: { color: getStanceColor(citation.stance), textDecoration: "none", fontWeight: "bold" }, onMouseOver: (e) => e.currentTarget.style.textDecoration = "underline", onMouseOut: (e) => e.currentTarget.style.textDecoration = "none" }, citation.source || citation.url),
-                citation.snippet && (react_1.default.createElement(Text, { style: { color: "#b9b9b9", fontSize: "14px", display: "block", marginTop: "4px" } }, citation.snippet))))))))));
+            }, headStyle: { color: "#fff", backgroundColor: "#2f2f2e", borderBottom: "1px solid #444" }, bodyStyle: { backgroundColor: "#2f2f2e" } }, source !== "public" ? (react_1.default.createElement(react_1.default.Fragment, null,
+            react_1.default.createElement("ul", { style: { margin: 0, paddingLeft: 0, listStyle: "none" } }, citations.map((citation, index) => (react_1.default.createElement("li", { key: index, style: { marginBottom: "12px" } },
+                react_1.default.createElement("a", { rel: "noopener noreferrer", style: { color: "#257cf1", textDecoration: "none", fontWeight: "bold" }, 
+                    // onMouseOver={(e) => e.currentTarget.style.textDecoration = "underline"}
+                    onMouseOut: (e) => e.currentTarget.style.textDecoration = "none" }, citation.document),
+                citation.match_snippet && (react_1.default.createElement(Text, { style: { color: "#b9b9b9", fontSize: "14px", display: "block", marginTop: "4px" } }, citation.match_snippet)))))))) : (react_1.default.createElement("ul", { style: { margin: 0, paddingLeft: 0, listStyle: "none" } }, citations.map((citation, index) => (react_1.default.createElement("li", { key: index, style: { marginBottom: "12px" } },
+            react_1.default.createElement("a", { href: citation.url, target: "_blank", rel: "noopener noreferrer", style: { color: getStanceColor(citation.stance), textDecoration: "none", fontWeight: "bold" }, onMouseOver: (e) => e.currentTarget.style.textDecoration = "underline", onMouseOut: (e) => e.currentTarget.style.textDecoration = "none" }, citation.source || citation.url),
+            citation.snippet && (react_1.default.createElement(Text, { style: { color: "#b9b9b9", fontSize: "14px", display: "block", marginTop: "4px" } }, citation.snippet)))))))))));
 };
 exports.default = App;

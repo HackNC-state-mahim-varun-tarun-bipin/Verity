@@ -29,6 +29,7 @@ const Settings: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         overflow: 'visible',
         boxShadow: '0 20px 60px rgba(0, 0, 0, 0.8)',
         border: '1px solid rgba(255, 255, 255, 0.1)',
+        fontFamily: '"SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       }}
     >
       <Title level={2} style={{ color: '#fff', marginBottom: '16px', marginTop: '0px' }}>

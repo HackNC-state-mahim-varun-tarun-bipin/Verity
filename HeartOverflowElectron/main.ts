@@ -102,7 +102,7 @@ function createTray() {
     }}
   ]);
   tray.setContextMenu(contextMenu);
-  tray.setToolTip('HeartOverflow');
+  tray.setToolTip('Verity');
 }
 
 function checkClipboard() {
@@ -110,7 +110,7 @@ function checkClipboard() {
   if (currentText) {
     lastClipboardText = currentText;
     
-    const sanitizedText = currentText.replace(/’/g, "\\'").replace(/—/g, '-');
+    const sanitizedText = currentText.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x00-\x7F]/g, '').replace(/'/g, "\\'")
     
     dashboardWindow.webContents.send('clipboard-update', currentText);
     
