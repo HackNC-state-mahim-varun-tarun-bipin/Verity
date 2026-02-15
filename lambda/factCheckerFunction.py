@@ -67,6 +67,7 @@ def format_response(raw_data, source, is_public):
         "body": json.dumps({
             "verdict": verdict,
             "confidence": raw_data.get('confidence'),
+            "summary": raw_data.get('summary'),
             "source": source,
             "claim": claim_text,
             "citations": raw_data.get('citations', []),
