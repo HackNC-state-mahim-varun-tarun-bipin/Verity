@@ -3,13 +3,15 @@ import path from 'path';
 import { exec } from 'child_process';
 import https from 'https';
 
-let mainWindow: BrowserWindow;
+let dashboardWindow: BrowserWindow;
+let notificationWindow: BrowserWindow;
 let tray: Tray;
 let lastClipboardText = '';
 let isQuitting = false;
+let notificationTimeout: NodeJS.Timeout | null = null;
 
-function createWindow() {
-  mainWindow = new BrowserWindow({
+function createDashboardWindow() {
+  dashboardWindow = new BrowserWindow({
     width: 800,
     height: 600,
     show: false,
@@ -24,15 +26,48 @@ function createWindow() {
     }
   });
 
-  mainWindow.loadFile('index.html');
-  startClipboardMonitor();
+  dashboardWindow.loadFile('index.html');
 
-  mainWindow.on('close', (event) => {
+  dashboardWindow.on('close', (event) => {
     if (!isQuitting) {
       event.preventDefault();
-      mainWindow.hide();
+      dashboardWindow.hide();
     }
   });
+}
+
+function createNotificationWindow() {
+  const { screen } = require('electron');
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width, height } = primaryDisplay.workAreaSize;
+
+  notificationWindow = new BrowserWindow({
+    width: 300,
+    height: 100,
+    x: width - 320,
+    y: 20,
+    show: false,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false
+    }
+  });
+
+  notificationWindow.loadFile('notification.html');
+}
+
+function showNotification() {
+  notificationWindow.webContents.send('truth-label', 'Checking...');
+  notificationWindow.show();
+  
+  if (notificationTimeout) {
+    clearTimeout(notificationTimeout);
+    notificationTimeout = null;
+  }
 }
 
 function createTray() {
@@ -49,13 +84,18 @@ function createTray() {
         
         exec(copyCommand, () => {
           setTimeout(() => {
-            mainWindow.show();
-            mainWindow.focus();
+            showNotification();
+            checkClipboard();
           }, 200);
         });
       }
     },
-    { label: 'Open Dashboard', click: () => mainWindow.show() },
+    { label: 'Open Dashboard', click: () => dashboardWindow.show() },
+    { label: 'Settings', click: () => {
+      dashboardWindow.show();
+      dashboardWindow.focus();
+      dashboardWindow.webContents.send('open-settings');
+    }},
     { label: 'Quit', click: () => {
       isQuitting = true;
       app.quit();
@@ -65,56 +105,72 @@ function createTray() {
   tray.setToolTip('HeartOverflow');
 }
 
-function startClipboardMonitor() {
-  setInterval(() => {
-    const currentText = clipboard.readText();
-    if (currentText && currentText !== lastClipboardText) {
-      lastClipboardText = currentText;
-      mainWindow.webContents.send('clipboard-update', currentText);
-      
-      const sanitizedText = currentText.replace(/'/g, "\\'").replace(/—/g, '-');
-      
-      mainWindow.webContents.executeJavaScript('localStorage.getItem("affiliation")')
-        .then((affiliation) => {
-          const payload: any = { text: sanitizedText };
-          // if (affiliation) payload.affiliation = affiliation;
-          const data = JSON.stringify(payload);
-          
-          const options = {
-            hostname: '3cdqdmy43d.execute-api.us-east-1.amazonaws.com',
-            path: '/staging/check',
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Content-Length': data.length
+function checkClipboard() {
+  const currentText = clipboard.readText();
+  if (currentText) {
+    lastClipboardText = currentText;
+    
+    const sanitizedText = currentText.replace(/’/g, "\\'").replace(/—/g, '-');
+    
+    dashboardWindow.webContents.send('clipboard-update', currentText);
+    
+    dashboardWindow.webContents.executeJavaScript('localStorage.getItem("affiliation")')
+      .then((affiliation) => {
+        const payload: any = { text: sanitizedText, affiliation: affiliation || ''};
+        const data = JSON.stringify(payload);
+        
+        const options = {
+          hostname: '3cdqdmy43d.execute-api.us-east-1.amazonaws.com',
+          path: '/staging/check',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': data.length
+          }
+        };
+        
+        const req = https.request(options, (res) => {
+          let responseData = '';
+          res.on('data', (chunk) => { responseData += chunk; });
+          res.on('end', () => {
+            const response = JSON.parse(responseData);
+            console.log('API Response:', response);
+            dashboardWindow.webContents.send('verification-result', response);
+            notificationWindow.webContents.send('truth-label', response.verdict);
+            notificationWindow.webContents.send('confidence', response.confidence);
+            
+            if (notificationTimeout) {
+              clearTimeout(notificationTimeout);
             }
-          };
-          
-          const req = https.request(options, (res) => {
-            let responseData = '';
-            res.on('data', (chunk) => { responseData += chunk; });
-            res.on('end', () => {
-              const response = JSON.parse(responseData);
-              console.log('API Response:', response);
-              mainWindow.webContents.send('verification-result', response);
-            });
+            notificationTimeout = setTimeout(() => {
+              if (notificationWindow && !notificationWindow.isDestroyed()) {
+                notificationWindow.hide();
+              }
+            }, 30000);
           });
-          
-          req.on('error', () => {});
-          
-          req.write(data);
-          req.end();
         });
-    }
-  }, 500);
+        
+        req.on('error', () => {});
+        
+        req.write(data);
+        req.end();
+      });
+  }
 }
 
 app.whenReady().then(() => {
-  createWindow();
+  createDashboardWindow();
+  createNotificationWindow();
   createTray();
   
   ipcMain.on('hide-window', () => {
-    mainWindow.hide();
+    dashboardWindow.hide();
+  });
+  
+  ipcMain.on('open-dashboard', () => {
+    notificationWindow.hide();
+    dashboardWindow.show();
+    dashboardWindow.focus();
   });
   
   globalShortcut.register('CommandOrControl+Alt+Shift+K', () => {
@@ -124,8 +180,8 @@ app.whenReady().then(() => {
     
     exec(copyCommand, () => {
       setTimeout(() => {
-        mainWindow.show();
-        mainWindow.focus();
+        showNotification();
+        checkClipboard();
       }, 200);
     });
   });

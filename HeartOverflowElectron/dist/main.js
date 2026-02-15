@@ -7,12 +7,14 @@ const electron_1 = require("electron");
 const path_1 = __importDefault(require("path"));
 const child_process_1 = require("child_process");
 const https_1 = __importDefault(require("https"));
-let mainWindow;
+let dashboardWindow;
+let notificationWindow;
 let tray;
 let lastClipboardText = '';
 let isQuitting = false;
-function createWindow() {
-    mainWindow = new electron_1.BrowserWindow({
+let notificationTimeout = null;
+function createDashboardWindow() {
+    dashboardWindow = new electron_1.BrowserWindow({
         width: 800,
         height: 600,
         show: false,
@@ -26,14 +28,42 @@ function createWindow() {
             contextIsolation: false
         }
     });
-    mainWindow.loadFile('index.html');
-    startClipboardMonitor();
-    mainWindow.on('close', (event) => {
+    dashboardWindow.loadFile('index.html');
+    dashboardWindow.on('close', (event) => {
         if (!isQuitting) {
             event.preventDefault();
-            mainWindow.hide();
+            dashboardWindow.hide();
         }
     });
+}
+function createNotificationWindow() {
+    const { screen } = require('electron');
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width, height } = primaryDisplay.workAreaSize;
+    notificationWindow = new electron_1.BrowserWindow({
+        width: 300,
+        height: 100,
+        x: width - 320,
+        y: 20,
+        show: false,
+        frame: false,
+        transparent: true,
+        alwaysOnTop: true,
+        skipTaskbar: true,
+        webPreferences: {
+            nodeIntegration: true,
+            contextIsolation: false
+        }
+    });
+    notificationWindow.loadFile('notification.html');
+}
+function showNotification() {
+    notificationWindow.webContents.send('truth-label', 'Checking...');
+    notificationWindow.show();
+    if (notificationTimeout) {
+        clearTimeout(notificationTimeout);
+        notificationTimeout = null;
+    }
 }
 function createTray() {
     const iconPath = path_1.default.join(__dirname, '../eye.png');
@@ -48,13 +78,18 @@ function createTray() {
                     : 'xdotool key ctrl+c';
                 (0, child_process_1.exec)(copyCommand, () => {
                     setTimeout(() => {
-                        mainWindow.show();
-                        mainWindow.focus();
+                        showNotification();
+                        checkClipboard();
                     }, 200);
                 });
             }
         },
-        { label: 'Open Dashboard', click: () => mainWindow.show() },
+        { label: 'Open Dashboard', click: () => dashboardWindow.show() },
+        { label: 'Settings', click: () => {
+                dashboardWindow.show();
+                dashboardWindow.focus();
+                dashboardWindow.webContents.send('open-settings');
+            } },
         { label: 'Quit', click: () => {
                 isQuitting = true;
                 electron_1.app.quit();
@@ -63,48 +98,61 @@ function createTray() {
     tray.setContextMenu(contextMenu);
     tray.setToolTip('HeartOverflow');
 }
-function startClipboardMonitor() {
-    setInterval(() => {
-        const currentText = electron_1.clipboard.readText();
-        if (currentText && currentText !== lastClipboardText) {
-            lastClipboardText = currentText;
-            mainWindow.webContents.send('clipboard-update', currentText);
-            const sanitizedText = currentText.replace(/'/g, "\\'").replace(/—/g, '-');
-            mainWindow.webContents.executeJavaScript('localStorage.getItem("affiliation")')
-                .then((affiliation) => {
-                const payload = { text: sanitizedText };
-                // if (affiliation) payload.affiliation = affiliation;
-                const data = JSON.stringify(payload);
-                const options = {
-                    hostname: '3cdqdmy43d.execute-api.us-east-1.amazonaws.com',
-                    path: '/staging/check',
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Content-Length': data.length
+function checkClipboard() {
+    const currentText = electron_1.clipboard.readText();
+    if (currentText) {
+        lastClipboardText = currentText;
+        const sanitizedText = currentText.replace(/’/g, "\\'").replace(/—/g, '-');
+        dashboardWindow.webContents.send('clipboard-update', currentText);
+        dashboardWindow.webContents.executeJavaScript('localStorage.getItem("affiliation")')
+            .then((affiliation) => {
+            const payload = { text: sanitizedText, affiliation: affiliation || '' };
+            const data = JSON.stringify(payload);
+            const options = {
+                hostname: '3cdqdmy43d.execute-api.us-east-1.amazonaws.com',
+                path: '/staging/check',
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Content-Length': data.length
+                }
+            };
+            const req = https_1.default.request(options, (res) => {
+                let responseData = '';
+                res.on('data', (chunk) => { responseData += chunk; });
+                res.on('end', () => {
+                    const response = JSON.parse(responseData);
+                    console.log('API Response:', response);
+                    dashboardWindow.webContents.send('verification-result', response);
+                    notificationWindow.webContents.send('truth-label', response.verdict);
+                    notificationWindow.webContents.send('confidence', response.confidence);
+                    if (notificationTimeout) {
+                        clearTimeout(notificationTimeout);
                     }
-                };
-                const req = https_1.default.request(options, (res) => {
-                    let responseData = '';
-                    res.on('data', (chunk) => { responseData += chunk; });
-                    res.on('end', () => {
-                        const response = JSON.parse(responseData);
-                        console.log('API Response:', response);
-                        mainWindow.webContents.send('verification-result', response);
-                    });
+                    notificationTimeout = setTimeout(() => {
+                        if (notificationWindow && !notificationWindow.isDestroyed()) {
+                            notificationWindow.hide();
+                        }
+                    }, 30000);
                 });
-                req.on('error', () => { });
-                req.write(data);
-                req.end();
             });
-        }
-    }, 500);
+            req.on('error', () => { });
+            req.write(data);
+            req.end();
+        });
+    }
 }
 electron_1.app.whenReady().then(() => {
-    createWindow();
+    createDashboardWindow();
+    createNotificationWindow();
     createTray();
     electron_1.ipcMain.on('hide-window', () => {
-        mainWindow.hide();
+        dashboardWindow.hide();
+    });
+    electron_1.ipcMain.on('open-dashboard', () => {
+        notificationWindow.hide();
+        dashboardWindow.show();
+        dashboardWindow.focus();
     });
     electron_1.globalShortcut.register('CommandOrControl+Alt+Shift+K', () => {
         const copyCommand = process.platform === 'darwin'
@@ -112,8 +160,8 @@ electron_1.app.whenReady().then(() => {
             : 'xdotool key ctrl+c';
         (0, child_process_1.exec)(copyCommand, () => {
             setTimeout(() => {
-                mainWindow.show();
-                mainWindow.focus();
+                showNotification();
+                checkClipboard();
             }, 200);
         });
     });

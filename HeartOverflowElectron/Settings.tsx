@@ -21,7 +21,8 @@ const Settings: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   return (
     <div
       style={{
-        backgroundColor: 'rgba(21, 21, 20, 0.6)',
+        background: "rgba(0, 0, 0, 0.55)",
+        backdropFilter: "blur(10px)",
         padding: '32px',
         minHeight: '90vh',
         borderRadius: '16px',
@@ -52,6 +53,7 @@ const Settings: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             marginBottom: '16px',
             boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
             borderRadius: '8px',
+            backgroundColor: "#b9b9b9"
           }}
         />
         <Button
@@ -71,6 +73,7 @@ const Settings: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           onClick={onBack}
           style={{
             borderRadius: '20px',
+            backgroundColor:"#b9b9b9"
           }}
         >
           Back

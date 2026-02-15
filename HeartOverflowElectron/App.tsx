@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Card, Typography, Progress, Flex, Button } from "antd";
+import { Card, Typography, Progress, Flex, Button, Tag } from "antd";
 import { SettingOutlined } from '@ant-design/icons';
 import Settings from './Settings';
 
@@ -9,10 +9,11 @@ const App: React.FC = () => {
   const [clipboardText, setClipboardText] = useState(
     "Waiting for clipboard text...",
   );
-  const [truthLabel, setTruthLabel] = useState<string>("");
+  const [truthLabel, setTruthLabel] = useState<string>("UNKNOWN");
   const [confidence, setConfidence] = useState<number>(0);
   const [citations, setCitations] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [source, setSource] = useState<string>("");
+  const [loading, setLoading] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
   const getLabelColor = (label: string) => {
@@ -30,11 +31,24 @@ const App: React.FC = () => {
     }
   };
 
+  const getStanceColor = (stance: string) => {
+    switch (stance?.toLowerCase()) {
+      case "support":
+        return "#4CAF50";
+      case "contradict":
+        return "#f44336";
+      case "neutral":
+        return "#FFD700";
+      default:
+        return "#257cf1";
+    }
+  };
+
   const getProgressColor = () => {
     if (confidence > 0.6) return "#4CAF50";
     if (confidence < -0.6) return "#f44336";
-    if (confidence === 0) return "#FF9800";
-    return "#1890ff";
+    if (confidence === 0) return "#1890ff";
+    return "#FF9800";
   };
 
   useEffect(() => {
@@ -42,31 +56,34 @@ const App: React.FC = () => {
 
     ipcRenderer.on("clipboard-update", (_event: any, text: string) => {
       setClipboardText(text);
-      setTruthLabel("");
+      setTruthLabel("UNKNOWN");
       setConfidence(0);
       setCitations([]);
+      setSource("");
       setLoading(true);
     });
 
     ipcRenderer.on("verification-result", (_event: any, response: any) => {
       setLoading(false);
 
-      if (response && response.body) {
-        try {
-          const body = JSON.parse(response.body);
-          if (body.truth_label) {
-            setTruthLabel(body.truth_label);
-          }
-          if (body.confidence !== undefined) {
-            setConfidence(body.confidence);
-          }
-          if (body.citations) {
-            setCitations(body.citations);
-          }
-        } catch (e) {
-          setTruthLabel("Error");
+      if (response) {
+        if (response.verdict) {
+          setTruthLabel(response.verdict);
+        }
+        if (response.confidence !== undefined) {
+          setConfidence(response.confidence);
+        }
+        if (response.citations) {
+          setCitations(response.citations);
+        }
+        if (response.source) {
+          setSource(response.source);
         }
       }
+    });
+
+    ipcRenderer.on("open-settings", () => {
+      setShowSettings(true);
     });
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -86,7 +103,8 @@ const App: React.FC = () => {
   return (
     <div
       style={{
-        backgroundColor: "rgba(21, 21, 20, 0.6)",
+        background: "rgba(0, 0, 0, 0.55)",
+        backdropFilter: "blur(10px)",
         padding: "32px",
         minHeight: "90vh",
         borderRadius: "16px",
@@ -138,16 +156,25 @@ const App: React.FC = () => {
               <span style={{ color: '#b9b9b9' }}>{`${Math.round(Math.abs(confidence) * 100)}%`}</span>
             )}
           />
-          <Text
-            style={{
-              color: getLabelColor(truthLabel),
-              fontSize: "18px",
-              fontWeight: "bold",
-              textTransform: "capitalize",
-            }}
-          >
-            {truthLabel || "Waiting for verification..."}
-          </Text>
+          <div>
+            <Text
+              style={{
+                color: getLabelColor(truthLabel),
+                fontSize: "18px",
+                fontWeight: "bold",
+                textTransform: "capitalize",
+              }}
+            >
+              {truthLabel || "Waiting for verification..."}
+            </Text>
+            {source && (
+              <div style={{ marginTop: "8px" }}>
+                <Tag color={source === "public" ? "orange" : "geekblue"}>
+                  {source.toUpperCase()}
+                </Tag>
+              </div>
+            )}
+          </div>
         </Flex>
       </Card>
       {citations.length > 0 && (
@@ -169,7 +196,7 @@ const App: React.FC = () => {
                   href={citation.url} 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  style={{ color: getLabelColor(truthLabel), textDecoration: "none", fontWeight: "bold" }}
+                  style={{ color: getStanceColor(citation.stance), textDecoration: "none", fontWeight: "bold" }}
                   onMouseOver={(e) => e.currentTarget.style.textDecoration = "underline"}
                   onMouseOut={(e) => e.currentTarget.style.textDecoration = "none"}
                 >

@@ -43,10 +43,11 @@ const Settings_1 = __importDefault(require("./Settings"));
 const { Title, Text } = antd_1.Typography;
 const App = () => {
     const [clipboardText, setClipboardText] = (0, react_1.useState)("Waiting for clipboard text...");
-    const [truthLabel, setTruthLabel] = (0, react_1.useState)("");
+    const [truthLabel, setTruthLabel] = (0, react_1.useState)("UNKNOWN");
     const [confidence, setConfidence] = (0, react_1.useState)(0);
     const [citations, setCitations] = (0, react_1.useState)([]);
-    const [loading, setLoading] = (0, react_1.useState)(true);
+    const [source, setSource] = (0, react_1.useState)("");
+    const [loading, setLoading] = (0, react_1.useState)(false);
     const [showSettings, setShowSettings] = (0, react_1.useState)(false);
     const getLabelColor = (label) => {
         switch (label.toLowerCase()) {
@@ -62,43 +63,56 @@ const App = () => {
                 return "#FF9800";
         }
     };
+    const getStanceColor = (stance) => {
+        switch (stance?.toLowerCase()) {
+            case "support":
+                return "#4CAF50";
+            case "contradict":
+                return "#f44336";
+            case "neutral":
+                return "#FFD700";
+            default:
+                return "#257cf1";
+        }
+    };
     const getProgressColor = () => {
         if (confidence > 0.6)
             return "#4CAF50";
         if (confidence < -0.6)
             return "#f44336";
         if (confidence === 0)
-            return "#FF9800";
-        return "#1890ff";
+            return "#1890ff";
+        return "#FF9800";
     };
     (0, react_1.useEffect)(() => {
         const { ipcRenderer } = window.require("electron");
         ipcRenderer.on("clipboard-update", (_event, text) => {
             setClipboardText(text);
-            setTruthLabel("");
+            setTruthLabel("UNKNOWN");
             setConfidence(0);
             setCitations([]);
+            setSource("");
             setLoading(true);
         });
         ipcRenderer.on("verification-result", (_event, response) => {
             setLoading(false);
-            if (response && response.body) {
-                try {
-                    const body = JSON.parse(response.body);
-                    if (body.truth_label) {
-                        setTruthLabel(body.truth_label);
-                    }
-                    if (body.confidence !== undefined) {
-                        setConfidence(body.confidence);
-                    }
-                    if (body.citations) {
-                        setCitations(body.citations);
-                    }
+            if (response) {
+                if (response.verdict) {
+                    setTruthLabel(response.verdict);
                 }
-                catch (e) {
-                    setTruthLabel("Error");
+                if (response.confidence !== undefined) {
+                    setConfidence(response.confidence);
+                }
+                if (response.citations) {
+                    setCitations(response.citations);
+                }
+                if (response.source) {
+                    setSource(response.source);
                 }
             }
+        });
+        ipcRenderer.on("open-settings", () => {
+            setShowSettings(true);
         });
         const handleKeyDown = (e) => {
             if (e.key === "Escape") {
@@ -112,7 +126,8 @@ const App = () => {
         return react_1.default.createElement(Settings_1.default, { onBack: () => setShowSettings(false) });
     }
     return (react_1.default.createElement("div", { style: {
-            backgroundColor: "rgba(21, 21, 20, 0.6)",
+            background: "rgba(0, 0, 0, 0.55)",
+            backdropFilter: "blur(10px)",
             padding: "32px",
             minHeight: "90vh",
             borderRadius: "16px",
@@ -136,12 +151,15 @@ const App = () => {
             } },
             react_1.default.createElement(antd_1.Flex, { align: "center", gap: "large" },
                 react_1.default.createElement(antd_1.Progress, { type: "circle", percent: Math.abs(confidence) * 100, strokeColor: getProgressColor(), trailColor: "#ffffff", format: (percent) => (react_1.default.createElement("span", { style: { color: '#b9b9b9' } }, `${Math.round(Math.abs(confidence) * 100)}%`)) }),
-                react_1.default.createElement(Text, { style: {
-                        color: getLabelColor(truthLabel),
-                        fontSize: "18px",
-                        fontWeight: "bold",
-                        textTransform: "capitalize",
-                    } }, truthLabel || "Waiting for verification..."))),
+                react_1.default.createElement("div", null,
+                    react_1.default.createElement(Text, { style: {
+                            color: getLabelColor(truthLabel),
+                            fontSize: "18px",
+                            fontWeight: "bold",
+                            textTransform: "capitalize",
+                        } }, truthLabel || "Waiting for verification..."),
+                    source && (react_1.default.createElement("div", { style: { marginTop: "8px" } },
+                        react_1.default.createElement(antd_1.Tag, { color: source === "public" ? "orange" : "geekblue" }, source.toUpperCase())))))),
         citations.length > 0 && (react_1.default.createElement(antd_1.Card, { title: "Citations", style: {
                 backgroundColor: "#2f2f2e",
                 border: "none",
@@ -149,7 +167,7 @@ const App = () => {
                 marginTop: "16px"
             }, headStyle: { color: "#fff", backgroundColor: "#2f2f2e", borderBottom: "1px solid #444" }, bodyStyle: { backgroundColor: "#2f2f2e" } },
             react_1.default.createElement("ul", { style: { margin: 0, paddingLeft: "20px" } }, citations.map((citation, index) => (react_1.default.createElement("li", { key: index, style: { marginBottom: "12px" } },
-                react_1.default.createElement("a", { href: citation.url, target: "_blank", rel: "noopener noreferrer", style: { color: getLabelColor(truthLabel), textDecoration: "none", fontWeight: "bold" }, onMouseOver: (e) => e.currentTarget.style.textDecoration = "underline", onMouseOut: (e) => e.currentTarget.style.textDecoration = "none" }, citation.source || citation.url),
+                react_1.default.createElement("a", { href: citation.url, target: "_blank", rel: "noopener noreferrer", style: { color: getStanceColor(citation.stance), textDecoration: "none", fontWeight: "bold" }, onMouseOver: (e) => e.currentTarget.style.textDecoration = "underline", onMouseOut: (e) => e.currentTarget.style.textDecoration = "none" }, citation.source || citation.url),
                 citation.snippet && (react_1.default.createElement(Text, { style: { color: "#b9b9b9", fontSize: "14px", display: "block", marginTop: "4px" } }, citation.snippet))))))))));
 };
 exports.default = App;

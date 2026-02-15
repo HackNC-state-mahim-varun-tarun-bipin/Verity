@@ -49,7 +49,8 @@ const Settings = ({ onBack }) => {
         onBack();
     };
     return (react_1.default.createElement("div", { style: {
-            backgroundColor: 'rgba(21, 21, 20, 0.6)',
+            background: "rgba(0, 0, 0, 0.55)",
+            backdropFilter: "blur(10px)",
             padding: '32px',
             minHeight: '90vh',
             borderRadius: '16px',
@@ -68,6 +69,7 @@ const Settings = ({ onBack }) => {
                     marginBottom: '16px',
                     boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
                     borderRadius: '8px',
+                    backgroundColor: "#b9b9b9"
                 } }),
             react_1.default.createElement(antd_1.Button, { type: "primary", onClick: handleSave, disabled: affiliation === initialValue, style: {
                     backgroundColor: '#257cf1',
@@ -77,6 +79,7 @@ const Settings = ({ onBack }) => {
                 } }, "Save"),
             react_1.default.createElement(antd_1.Button, { onClick: onBack, style: {
                     borderRadius: '20px',
+                    backgroundColor: "#b9b9b9"
                 } }, "Back"))));
 };
 exports.default = Settings;
