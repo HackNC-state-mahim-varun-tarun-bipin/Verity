@@ -56,6 +56,20 @@ const App: React.FC = () => {
     return "#FF9800";
   };
 
+  const getBackgroundGradient = (label: string) => {
+    switch (label.toLowerCase()) {
+      case "likely true":
+        return "linear-gradient(180deg, #07130c, #0e2216)";
+      case "unknown":
+      case "mixed/uncertain":
+        return "linear-gradient(180deg, #181006, #2a1a08)";
+      case "likely false":
+        return "linear-gradient(180deg, #1a0909, #2a1010)";
+      default:
+        return "linear-gradient(180deg, #111111, #1f1f1f)";
+    }
+  };
+
   useEffect(() => {
     const { ipcRenderer } = window.require("electron");
 
@@ -125,7 +139,7 @@ const App: React.FC = () => {
   return (
     <div
       style={{
-        background: "rgba(0, 0, 0, 0.55)",
+        background: getBackgroundGradient(truthLabel),
         backdropFilter: "blur(10px)",
         padding: "32px",
         minHeight: "90vh",
