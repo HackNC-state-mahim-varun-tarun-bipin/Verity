@@ -7,6 +7,7 @@ const Notification: React.FC = () => {
   const [truthLabel, setTruthLabel] = useState("Checking...");
   const [confidence, setConfidence] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [fadeOut, setFadeOut] = useState(false);
 
   useEffect(() => {
     const handleTruthLabel = (_event: any, label: string) => {
@@ -22,12 +23,24 @@ const Notification: React.FC = () => {
       setConfidence(conf);
     };
 
+    const handleFadeOut = () => {
+      setFadeOut(true);
+    };
+
+    const handleFadeIn = () => {
+      setFadeOut(false);
+    };
+
     ipcRenderer.on("truth-label", handleTruthLabel);
     ipcRenderer.on("confidence", handleConfidence);
+    ipcRenderer.on("fade-out", handleFadeOut);
+    ipcRenderer.on("fade-in", handleFadeIn);
 
     return () => {
       ipcRenderer.removeListener("truth-label", handleTruthLabel);
       ipcRenderer.removeListener("confidence", handleConfidence);
+      ipcRenderer.removeListener("fade-out", handleFadeOut);
+      ipcRenderer.removeListener("fade-in", handleFadeIn);
     };
   }, []);
 
@@ -60,7 +73,9 @@ const Notification: React.FC = () => {
   };
 
   const handleClick = () => {
-    ipcRenderer.send("open-dashboard");
+    if (!fadeOut) {
+      ipcRenderer.send("open-dashboard");
+    }
   };
 
   return (
@@ -79,6 +94,8 @@ const Notification: React.FC = () => {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
+        opacity: fadeOut ? 0 : 1,
+        transition: "opacity 1.2s ease",
       }}
     >
       {loading ? (

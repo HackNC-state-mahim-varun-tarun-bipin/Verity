@@ -58,6 +58,7 @@ function createNotificationWindow() {
     notificationWindow.loadFile('notification.html');
 }
 function showNotification() {
+    notificationWindow.webContents.send('fade-in');
     notificationWindow.webContents.send('truth-label', 'Checking...');
     notificationWindow.show();
     if (notificationTimeout) {
@@ -131,9 +132,14 @@ function checkClipboard() {
                     }
                     notificationTimeout = setTimeout(() => {
                         if (notificationWindow && !notificationWindow.isDestroyed()) {
-                            notificationWindow.hide();
+                            notificationWindow.webContents.send('fade-out');
+                            setTimeout(() => {
+                                if (notificationWindow && !notificationWindow.isDestroyed()) {
+                                    notificationWindow.hide();
+                                }
+                            }, 1000);
                         }
-                    }, 30000);
+                    }, 3000);
                 });
             });
             req.on('error', () => { });
