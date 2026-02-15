@@ -45,6 +45,11 @@ def extract_uri(location):
     if "s3Location" in location:
         return location["s3Location"].get("uri", "")
     return ""
+def limit_words(text: str, max_words: int = 100) -> str:
+    words = text.split()
+    if len(words) <= max_words:
+        return text
+    return " ".join(words[:max_words]) + "…"
 
 def resolve_kb_id(company_raw: str) -> str:
     company = normalize(company_raw).lower()
@@ -79,12 +84,10 @@ def extract_match_snippet(claim: str, chunk_text: str, max_chars: int) -> str:
     # Try to anchor on a meaningful token from claim
     tokens = [t for t in re.findall(r"[a-z0-9]{4,}", claim) if t not in {"this", "that", "with", "from", "have", "uses"}]
     anchor_pos = -1
-    anchor = None
     for t in tokens[:12]:
         p = low.find(t)
         if p != -1:
             anchor_pos = p
-            anchor = t
             break
 
     if anchor_pos == -1:
@@ -102,6 +105,13 @@ def extract_match_snippet(claim: str, chunk_text: str, max_chars: int) -> str:
         snippet = snippet + "…"
 
     return snippet
+
+def clamp01(x: float) -> float:
+    if x < 0.0:
+        return 0.0
+    if x > 1.0:
+        return 1.0
+    return x
 
 # -------- Retrieval --------
 def retrieve_chunks(kb_id: str, claim: str) -> List[Dict]:
@@ -135,7 +145,7 @@ def retrieval_confidence(chunks):
 
 # -------- Your Label Function --------
 def evaluate_truth(citations, confidence):
-    if citations is None:
+    if citations is None or len(citations) == 0:
         return "unknown"
 
     if confidence > 0.6:
@@ -146,6 +156,53 @@ def evaluate_truth(citations, confidence):
         return "unknown"
     else:
         return "mixed or uncertain"
+
+# -------- Summary Builder (NEW) --------
+def build_summary(claim: str, final_label: str, signed_conf: float, retr_conf: float, citations: List[Dict], internal_rationale: str) -> str:
+    """
+    Human-readable explanation capped at 150 words.
+    """
+
+    if final_label == "unknown":
+        if retr_conf < 0.25:
+            summary = (
+                f"Unknown: Retrieval confidence is low ({retr_conf:.2f}), "
+                "so there is insufficient reliable internal evidence to evaluate the claim."
+            )
+        else:
+            summary = (
+                "Unknown: Retrieved internal evidence does not clearly support "
+                "or contradict the claim."
+            )
+        return limit_words(summary)
+
+    supports = sum(1 for c in citations if c.get("supports") is True)
+    contradicts = sum(1 for c in citations if c.get("supports") is False)
+
+    if final_label == "likely true":
+        evidence_statement = (
+            f"Internal evidence supports the claim "
+            f"({supports} supporting, {contradicts} contradicting citations)."
+        )
+    elif final_label == "likely false":
+        evidence_statement = (
+            f"Internal evidence contradicts the claim "
+            f"({contradicts} contradicting, {supports} supporting citations)."
+        )
+    else:
+        evidence_statement = (
+            f"Internal evidence is mixed "
+            f"({supports} supporting, {contradicts} contradicting citations)."
+        )
+
+    summary = (
+        f"Label={final_label} "
+        f"(confidence={signed_conf:.2f}, retrievalConfidence={retr_conf:.2f}). "
+        f"{evidence_statement} "
+        f"{internal_rationale}"
+    )
+
+    return limit_words(summary)
 
 # -------- Model Call --------
 def classify(prompt):
@@ -210,12 +267,13 @@ def lambda_handler(event, context):
 
         internal_label = internal_result.get("label", "INTERNAL_UNSURE")
         model_conf = safe_float(internal_result.get("confidence", 0))
+        internal_rationale = normalize(internal_result.get("rationale", ""))  # NEW: capture rationale
 
         # Convert INTERNAL_* to signed confidence
         if internal_label == "INTERNAL_TRUE":
-            signed_conf = model_conf
+            signed_conf = clamp01(model_conf)
         elif internal_label == "INTERNAL_MISINFO":
-            signed_conf = -model_conf
+            signed_conf = -clamp01(model_conf)
         else:
             signed_conf = 0.0
 
@@ -240,7 +298,6 @@ def lambda_handler(event, context):
                         "supports": bool(cite.get("supports", False)),
                         "retrieval_score": chunk["score"],
                         "source_text": chunk["text"][:CITATION_TEXT_CHARS],
-                        # ✅ extra snippet showing where it matched
                         "match_snippet": snippet,
                     }
                 )
@@ -256,6 +313,16 @@ def lambda_handler(event, context):
                 "match_snippet": extract_match_snippet(claim, chunks[0].get("text", ""), MATCH_SNIPPET_CHARS),
             }
 
+        # NEW: summary field (human-readable rationale behind the label)
+        summary = build_summary(
+            claim=claim,
+            final_label=final_label,
+            signed_conf=signed_conf,
+            retr_conf=retr_conf,
+            citations=mapped_citations,
+            internal_rationale=internal_rationale,
+        )
+
         return {
             "statusCode": 200,
             "body": json.dumps(
@@ -266,8 +333,8 @@ def lambda_handler(event, context):
                     "retrievalConfidence": retr_conf,
                     "label": final_label,  # ONLY your 4 categories
                     "confidence": signed_conf,
+                    "summary": summary,  #  NEW FIELD
                     "citations": mapped_citations,
-                    # ✅ additional field: what it matched best (even if unknown)
                     "top_match": top_match,
                     "timestamp": int(time.time()),
                 }
