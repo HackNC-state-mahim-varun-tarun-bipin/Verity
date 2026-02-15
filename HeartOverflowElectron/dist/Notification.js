@@ -40,6 +40,7 @@ const Notification = () => {
     const [truthLabel, setTruthLabel] = (0, react_1.useState)("Checking...");
     const [confidence, setConfidence] = (0, react_1.useState)(0);
     const [loading, setLoading] = (0, react_1.useState)(true);
+    const [fadeOut, setFadeOut] = (0, react_1.useState)(false);
     (0, react_1.useEffect)(() => {
         const handleTruthLabel = (_event, label) => {
             setTruthLabel(label);
@@ -53,11 +54,21 @@ const Notification = () => {
         const handleConfidence = (_event, conf) => {
             setConfidence(conf);
         };
+        const handleFadeOut = () => {
+            setFadeOut(true);
+        };
+        const handleFadeIn = () => {
+            setFadeOut(false);
+        };
         ipcRenderer.on("truth-label", handleTruthLabel);
         ipcRenderer.on("confidence", handleConfidence);
+        ipcRenderer.on("fade-out", handleFadeOut);
+        ipcRenderer.on("fade-in", handleFadeIn);
         return () => {
             ipcRenderer.removeListener("truth-label", handleTruthLabel);
             ipcRenderer.removeListener("confidence", handleConfidence);
+            ipcRenderer.removeListener("fade-out", handleFadeOut);
+            ipcRenderer.removeListener("fade-in", handleFadeIn);
         };
     }, []);
     const getLabelColor = (label) => {
@@ -87,7 +98,9 @@ const Notification = () => {
         }
     };
     const handleClick = () => {
-        ipcRenderer.send("open-dashboard");
+        if (!fadeOut) {
+            ipcRenderer.send("open-dashboard");
+        }
     };
     return (react_1.default.createElement("div", { onClick: handleClick, style: {
             margin: 0,
@@ -102,6 +115,8 @@ const Notification = () => {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+            opacity: fadeOut ? 0 : 1,
+            transition: "opacity 1.2s ease",
         } }, loading ? (react_1.default.createElement(antd_1.Spin, null)) : (react_1.default.createElement(antd_1.Flex, { align: "center", gap: "middle" },
         react_1.default.createElement(antd_1.Progress, { type: "circle", percent: Math.round(Math.abs(confidence) * 100), strokeColor: getProgressColor(truthLabel), trailColor: "#ffffff", format: (percent) => react_1.default.createElement("span", { style: { color: 'white', fontSize: '10px', fontWeight: 600 } },
                 percent,
