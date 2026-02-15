@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { Card, Typography, Progress, Flex } from "antd";
+import { Card, Typography, Progress, Flex, Button } from "antd";
+import { SettingOutlined } from '@ant-design/icons';
+import Settings from './Settings';
 
 const { Title, Text } = Typography;
 
@@ -9,7 +11,9 @@ const App: React.FC = () => {
   );
   const [truthLabel, setTruthLabel] = useState<string>("");
   const [confidence, setConfidence] = useState<number>(0);
+  const [citations, setCitations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
 
   const getLabelColor = (label: string) => {
     switch (label.toLowerCase()) {
@@ -40,6 +44,7 @@ const App: React.FC = () => {
       setClipboardText(text);
       setTruthLabel("");
       setConfidence(0);
+      setCitations([]);
       setLoading(true);
     });
 
@@ -54,6 +59,9 @@ const App: React.FC = () => {
           }
           if (body.confidence !== undefined) {
             setConfidence(body.confidence);
+          }
+          if (body.citations) {
+            setCitations(body.citations);
           }
         } catch (e) {
           setTruthLabel("Error");
@@ -71,6 +79,10 @@ const App: React.FC = () => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  if (showSettings) {
+    return <Settings onBack={() => setShowSettings(false)} />;
+  }
+
   return (
     <div
       style={{
@@ -85,9 +97,14 @@ const App: React.FC = () => {
     >
       <Title
         level={2}
-        style={{ color: "#fff", marginBottom: "16px", marginTop: "0px" }}
+        style={{ color: "#fff", marginBottom: "16px", marginTop: "0px", display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
       >
         HeartOverflow
+        <Button
+          icon={<SettingOutlined />}
+          onClick={() => setShowSettings(true)}
+          style={{ backgroundColor: 'transparent', border: 'none', color: '#fff', fontSize: '20px' }}
+        />
       </Title>
       <Card
         type="inner"
@@ -118,7 +135,7 @@ const App: React.FC = () => {
             strokeColor={getProgressColor()}
             trailColor="#ffffff"
             format={(percent) => (
-              <span style={{ color: '#b9b9b9' }}>{`${Math.round(confidence * 100)}%`}</span>
+              <span style={{ color: '#b9b9b9' }}>{`${Math.round(Math.abs(confidence) * 100)}%`}</span>
             )}
           />
           <Text
@@ -133,6 +150,41 @@ const App: React.FC = () => {
           </Text>
         </Flex>
       </Card>
+      {citations.length > 0 && (
+        <Card
+          title="Citations"
+          style={{
+            backgroundColor: "#2f2f2e",
+            border: "none",
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
+            marginTop: "16px"
+          }}
+          headStyle={{ color: "#fff", backgroundColor: "#2f2f2e", borderBottom: "1px solid #444" }}
+          bodyStyle={{ backgroundColor: "#2f2f2e" }}
+        >
+          <ul style={{ margin: 0, paddingLeft: "20px" }}>
+            {citations.map((citation, index) => (
+              <li key={index} style={{ marginBottom: "12px" }}>
+                <a 
+                  href={citation.url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  style={{ color: getLabelColor(truthLabel), textDecoration: "none", fontWeight: "bold" }}
+                  onMouseOver={(e) => e.currentTarget.style.textDecoration = "underline"}
+                  onMouseOut={(e) => e.currentTarget.style.textDecoration = "none"}
+                >
+                  {citation.source || citation.url}
+                </a>
+                {citation.snippet && (
+                  <Text style={{ color: "#b9b9b9", fontSize: "14px", display: "block", marginTop: "4px" }}>
+                    {citation.snippet}
+                  </Text>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
     </div>
   );
 };

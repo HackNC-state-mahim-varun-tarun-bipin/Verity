@@ -69,29 +69,34 @@ function startClipboardMonitor() {
         if (currentText && currentText !== lastClipboardText) {
             lastClipboardText = currentText;
             mainWindow.webContents.send('clipboard-update', currentText);
-            const sanitizedText = currentText.replace(/’/g, "\'").replace(/—/g, '-');
-            const data = JSON.stringify({ text: sanitizedText });
-            const options = {
-                hostname: '3cdqdmy43d.execute-api.us-east-1.amazonaws.com',
-                path: '/staging/check',
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Content-Length': data.length
-                }
-            };
-            const req = https_1.default.request(options, (res) => {
-                let responseData = '';
-                res.on('data', (chunk) => { responseData += chunk; });
-                res.on('end', () => {
-                    const response = JSON.parse(responseData);
-                    console.log('API Response:', response);
-                    mainWindow.webContents.send('verification-result', response);
+            const sanitizedText = currentText.replace(/'/g, "\\'").replace(/—/g, '-');
+            mainWindow.webContents.executeJavaScript('localStorage.getItem("affiliation")')
+                .then((affiliation) => {
+                const payload = { text: sanitizedText };
+                // if (affiliation) payload.affiliation = affiliation;
+                const data = JSON.stringify(payload);
+                const options = {
+                    hostname: '3cdqdmy43d.execute-api.us-east-1.amazonaws.com',
+                    path: '/staging/check',
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Content-Length': data.length
+                    }
+                };
+                const req = https_1.default.request(options, (res) => {
+                    let responseData = '';
+                    res.on('data', (chunk) => { responseData += chunk; });
+                    res.on('end', () => {
+                        const response = JSON.parse(responseData);
+                        console.log('API Response:', response);
+                        mainWindow.webContents.send('verification-result', response);
+                    });
                 });
+                req.on('error', () => { });
+                req.write(data);
+                req.end();
             });
-            req.on('error', () => { });
-            req.write(data);
-            req.end();
         }
     }, 500);
 }
