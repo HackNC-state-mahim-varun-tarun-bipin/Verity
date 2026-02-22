@@ -9,9 +9,9 @@ from backboard import BackboardClient
 # Environment Variables (Lambda config)
 # ======================================================
 
-BACKBOARD_API_KEY = "espr_vdYfaaM8WXGTHFpfdHCwOjia4spzgzKduMo4l_nF22A"
-ASSISTANT_ID = "5c11f3e8-e0d0-42cb-9437-69494d70cef2"
-GEMINI_API_KEY = "AIzaSyDMnsm68xQCpyGbF_cBXel21Z6ITiWSCi8"
+BACKBOARD_API_KEY = ""
+ASSISTANT_ID = ""
+GEMINI_API_KEY = ""
 
 # ======================================================
 # Gemini: Citation Retrieval ONLY
